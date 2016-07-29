@@ -1,0 +1,5 @@
+.idea/*
+*.sc
+**/*.log
+**/target/*
+project/project/*
