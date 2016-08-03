@@ -3,11 +3,13 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.client.RequestBuilding._
 import akka.http.scaladsl.model.{StatusCode, HttpRequest}
-import akka.http.scaladsl.unmarshalling.{Unmarshaller, Unmarshal}
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import request._
+import response.Presence
+import response._
 
 import spray.json._
 import akka.stream.ActorMaterializer
-
 
 import scala.concurrent.Future
 
@@ -24,27 +26,19 @@ object Main extends App {
 }
 
 class MatrixClient(val serverUrl: String) {
+  import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+  import MatrixJsonProtocol._
+
   implicit val system = ActorSystem()
   implicit val materializer = ActorMaterializer()
   implicit val ec = system.dispatcher
 
-  import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-  import MatrixJsonProtocol._
-
-  val client = "client"
-  val clientEndpoint = s"$serverUrl/_matrix/$client"
-
   val http = Http()
+  val clientEndpoint = s"$serverUrl/_matrix/client"
 
-  def go() = http
-    .singleRequest(HttpRequest(uri = "https://vector.im/_matrix/client/versions"))
-    .flatMap(res => Unmarshal(res.entity).to[Seq[String]](versionsFormat,ec,materializer))
 
-  case class ErrorResponseException(errorResponse: ErrorResponse) extends Exception
-
-//  def single[T: JsonFormat](req: HttpRequest): Future[T] = http.singleRequest(req).flatMap(res => Unmarshal(res.entity).to[T])
   def single[T: JsonFormat](req: HttpRequest): Future[T] = {
-    implicit val rf = rootFormat(eitherFormat[ErrorResponse, T])
+    implicit val rf = rootFormat(eitherFormat[ErrorResponse, T](errorResFormat, implicitly[JsonFormat[T]]))
     http.singleRequest(req).flatMap(res => Unmarshal(res.entity).to[Either[ErrorResponse, T]]).flatMap {
       case Right(t) => Future.successful(t)
       case Left(e) => Future.failed(ErrorResponseException(e))
@@ -68,7 +62,7 @@ class MatrixClient(val serverUrl: String) {
     }
     object register {
       private val registerEndpoint = s"$versionEndpoint/register"
-      def post(userKind: UserKinds.UserKind, userName: String, password: String, bindEmail: Boolean, authenticationData: AuthenticationData) =
+      def post(userKind: UserKind, userName: String, password: String, bindEmail: Boolean, authenticationData: AuthenticationData) =
         single[RegisterResponse](Post(registerEndpoint, registerEntity(userName, password, bindEmail, authenticationData)))
 
       object email {
@@ -114,9 +108,28 @@ class MatrixClient(val serverUrl: String) {
           }
         }
       }
-
+    }
+    case class user(userId: String) {
+      object filter {
+        val filterEndpoint = s"$versionEndpoint/user/$userId/filter"
+        def post(
+          eventFields: Option[List[String]],
+          eventFormat: EventFormat,
+          accountData: AccountData,
+          room: RoomFilter,
+          presence: Filter
+          ) = ???
+      }
+      case class filter(filterId: String) {
+        val filterEndpoint = s"$versionEndpoint/user/$userId/filter/$filterId"
+        def get() = singleToStatus(Get(filterEndpoint))
+      }
     }
 
+    object sync {
+      val syncEndpoint = s"$versionEndpoint/sync"
+      def get(filter: String, since: String, fullState: Boolean, setPresence: Presence, timeout: Int): Future[SyncResponse] = ???
+    }
   }
 
   def shutDown() = {
@@ -125,16 +138,8 @@ class MatrixClient(val serverUrl: String) {
   }
 }
 
+case class ErrorResponseException(errorResponse: ErrorResponse) extends Exception
 
-case class AuthenticationData(session: String, _type: String)
-
-case class ThreePidCredentials(clientSecret: String, idServer: String, sid: String)
-
-
-object UserKinds extends Enumeration {
-  type UserKind = Value
-  val Guest, User = Value
-}
 
 object MatrixJsonProtocol extends DefaultJsonProtocol {
 
@@ -175,7 +180,5 @@ object MatrixJsonProtocol extends DefaultJsonProtocol {
   implicit lazy val threePidCredsFormat = jsonFormat(ThreePidCredentials, "client_secret", "id_server", "sid")
   def _3pidEntity(threePidCredentials: ThreePidCredentials, bind: Boolean) = JsObject("three_pid_creds" -> threePidCredentials.toJson, "bind" -> bind.toJson)
 
-  implicit lazy val _3pidResFormat = jsonFormat(_3pidResponse, "threepids")
-
-
+  implicit lazy val _3pidResFormat: RootJsonFormat[_3pidResponse] = jsonFormat(_3pidResponse, "threepids")
 }
