@@ -1,6 +1,6 @@
 package response
 import enumeratum._
-import spray.json.JsObject
+import spray.json.{DefaultJsonProtocol, JsObject}
 
 case class LoginResponse(accessToken: String, homeServer: String, userId: String, refreshToken: String)
 case class RegisterResponse(accessToken: String, homeServer: String, userId: String, refreshToken: String)
@@ -67,3 +67,14 @@ object ErrorCode extends Enum[ErrorCode] {
 }
 
 case class ErrorResponse(errorCode: ErrorCode, error: Option[String])
+
+trait ResponseFormats extends DefaultJsonProtocol {
+  import spray.json._
+
+  lazy val roomIdFormat: RootJsonFormat[String] = new RootJsonFormat[String] {
+    def read(json: JsValue) = fromField[String](json, "room_id")
+    def write(roomId: String) = JsObject("room_id" -> roomId.toJson)
+  }
+
+}
+

@@ -130,6 +130,23 @@ class MatrixClient(val serverUrl: String) {
       val syncEndpoint = s"$versionEndpoint/sync"
       def get(filter: String, since: String, fullState: Boolean, setPresence: Presence, timeout: Int): Future[SyncResponse] = ???
     }
+
+    object createRoom {
+      private val createRoomEndpoint = s"$versionEndpoint/createRoom"
+      def post(
+        preset: Preset,
+        invite: Seq[String] = Seq.empty,
+        /**If this is included, an m.room.name event will be sent into the room to indicate the name of the room. */
+        name: String = null,
+        visibility: Visibility = Visibility.Private,
+        invite3pids: Seq[Invite3pid] = Seq.empty,
+        topic: String = null,
+        initialState: Seq[StateEvent] = Seq.empty,
+        roomAliasName: String = null
+        ) = {
+        val req = ???
+      }
+    }
   }
 
   def shutDown() = {
@@ -181,4 +198,6 @@ object MatrixJsonProtocol extends DefaultJsonProtocol {
   def _3pidEntity(threePidCredentials: ThreePidCredentials, bind: Boolean) = JsObject("three_pid_creds" -> threePidCredentials.toJson, "bind" -> bind.toJson)
 
   implicit lazy val _3pidResFormat: RootJsonFormat[_3pidResponse] = jsonFormat(_3pidResponse, "threepids")
+
+
 }

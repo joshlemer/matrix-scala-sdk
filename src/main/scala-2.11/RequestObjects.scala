@@ -1,6 +1,7 @@
 package request
 import enumeratum._
 import response.EventFormat
+import spray.json.{JsObject, DefaultJsonProtocol}
 
 case class AuthenticationData(session: String, _type: String)
 
@@ -39,7 +40,44 @@ object UserKind extends Enum[UserKind] {
 
 sealed trait Presence extends EnumEntry
 
-case object Presence extends Enum[Presence] {
+object Presence extends Enum[Presence] {
   case object Offline extends Presence
   val values = findValues
+}
+
+sealed trait Visibility extends EnumEntry
+
+object Visibility extends Enum[Visibility] {
+  case object Public extends Visibility
+  case object Private extends Visibility
+  val values = findValues
+}
+
+sealed abstract class Preset(override val toString: String) extends EnumEntry
+object Preset extends Enum[Preset] {
+  /** join_rules is set to `invite`
+    * history_visibility is set to `shared` */
+  case object PrivateChat extends Preset("private_chat")
+  /** join_rules is set to `invite`
+    * history_visibility is set to `shared`
+    * all invitees are given the same power level as the room creator*/
+  case object TrustedPrivateChat extends Preset("trusted_private_chat")
+  /** join_rules is set to `public`
+    * history_visibility is set to `shared` */
+  case object PublicChat extends Preset("trusted_private_chat")
+
+  val values = findValues
+}
+
+case class Invite3pid(idServer: String, medium: String, address: String)
+
+case class StateEvent(content: String, _type: String, stateKey: String)
+
+trait RequestFormats extends DefaultJsonProtocol {
+  def createRoomRequest(
+    preset: Preset, invite: Seq[String], name: Option[String], visibility: Visibility,
+    invite3pids: Seq[Invite3pid], topic: Option[String], initialState: Seq[StateEvent],
+    roomAliasName: Option[String]
+    ) = JsObject(
+    )
 }
