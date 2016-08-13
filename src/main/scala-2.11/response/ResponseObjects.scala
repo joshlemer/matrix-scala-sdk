@@ -1,6 +1,7 @@
 package response
 
 import enumeratum._
+import response.ErrorCode.Other
 import spray.json.DefaultJsonProtocol
 
 case class LoginResponse(accessToken: String, homeServer: String, userId: String, refreshToken: String)
@@ -94,6 +95,29 @@ case class ErrorResponse(errorCode: ErrorCode, error: Option[String])
 trait ResponseFormats extends DefaultJsonProtocol {
   import spray.json._
 
+  implicit lazy val errorCodeFormat = new JsonFormat[ErrorCode] {
+    override def read(json: JsValue) = json match {
+      case JsString(str) => ErrorCode.withNameOption(str)
+        .getOrElse(Other(str))
+      case other => deserializationError(s"error code must be a JsString, found $other")
+    }
+    override def write(ec: ErrorCode) = JsString(ec.entryName)
+  }
+  implicit lazy val errorResFormat = jsonFormat(ErrorResponse, "errcode", "error")
+
+  implicit object versionsFormat extends RootJsonFormat[Seq[String]] {
+    override def read(json: JsValue): Seq[String] = {
+      println("fromField: " + fromField[List[String]](json, "versions"))
+      fromField[List[String]](json, "versions")
+    }
+    override def write(value: Seq[String]) = JsObject("versions" -> value.toJson)
+  }
+
+  implicit lazy val thirdPartyIdentifierFormat = jsonFormat(ThirdPartyIdentifier, "medium", "address")
+  implicit lazy val loginResFormat = jsonFormat(LoginResponse, "access_token", "home_server", "user_id", "refresh_token")
+  implicit lazy val registerResFormat = jsonFormat(RegisterResponse, "access_token", "home_server", "user_id", "refresh_token")
+  implicit lazy val tokenRefreshResFormat = jsonFormat(TokenRefreshResponse, "access_token", "refresh_token")
+
   lazy val roomIdFormat = new RootJsonFormat[String] {
     def read(json: JsValue) = fromField[String](json, "room_id")
     def write(roomId: String) = JsObject("room_id" -> roomId.toJson)
@@ -106,6 +130,8 @@ trait ResponseFormats extends DefaultJsonProtocol {
     }
     def write(membership: Membership) = JsString(membership.entryName)
   }
+
+  implicit lazy val _3pidResFormat: RootJsonFormat[_3pidResponse] = jsonFormat(_3pidResponse, "threepids")
 
   implicit lazy val syncResponseFormat = {
     implicit lazy val signedFormat = jsonFormat3(Signed)

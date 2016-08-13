@@ -1,18 +1,24 @@
+package client
+
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.client.RequestBuilding._
 import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.{Uri, StatusCode, HttpRequest}
+import akka.http.scaladsl.model.{HttpRequest, StatusCode, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import request._
-import response.ErrorCode.Other
-import response._
-
-import spray.json._
 import akka.stream.ActorMaterializer
+import request._
+import response._
+import spray.json._
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+
+package object client {
+  implicit class AnyAsOptionExtension[T <: Any](val any: T) extends AnyVal {
+    @inline final def ? = Option(any)
+  }
+}
 
 object Main extends App {
 
@@ -139,12 +145,11 @@ class MatrixClient(val serverUrl: String) {
 
     object sync {
       val syncEndpoint = s"$versionEndpoint/sync"
-      import request.Presence, Presence._
-      def get(accessToken: String, filter: String = null, since: String = null, timeout: Int = 4000, fullState: Boolean = false, setPresence: Presence = Offline): Future[SyncResponse] = {
-        val (filterOpt, sinceOpt) = (Option(filter), Option(since))
+      import request.Presence
+      def get(accessToken: String, filter: Option[String] = None, since: Option[String] = None, timeout: Int = 4000, fullState: Boolean = false, setPresence: Option[Presence] = None): Future[SyncResponse] = {
 
         val params = Map("full_state" -> fullState.toString, "access_token" -> accessToken) ++
-          filterOpt.map("filter" -> _) ++ sinceOpt.map("since" -> _)
+          filter.map("filter" -> _) ++ since.map("since" -> _)
 
 
         single[SyncResponse](Get(Uri(syncEndpoint).withQuery(Query(params))))
@@ -157,14 +162,15 @@ class MatrixClient(val serverUrl: String) {
         preset: Preset,
         invite: Seq[String] = Seq.empty,
         /**If this is included, an m.room.name event will be sent into the room to indicate the name of the room. */
-        name: String = null,
+        name: Option[String] = None,
         visibility: Visibility = Visibility.Private,
         invite3pids: Seq[Invite3pid] = Seq.empty,
-        topic: String = null,
+        topic: Option[String] = None,
         initialState: Seq[StateEvent] = Seq.empty,
-        roomAliasName: String = null
+        roomAliasName: Option[String] = None
         ) = {
-        val req = ???
+        val req = createRoomRequest(preset, invite, name, visibility, invite3pids, topic, initialState, roomAliasName)
+        single[RoomId](Post(createRoomEndpoint, req))(roomIdFormat)
       }
     }
   }
@@ -178,31 +184,8 @@ class MatrixClient(val serverUrl: String) {
 case class ErrorResponseException(errorResponse: ErrorResponse) extends Exception
 
 
-object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats {
+object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats with RequestFormats {
 
-  implicit lazy val errorCodeFormat = new JsonFormat[ErrorCode] {
-    override def read(json: JsValue) = json match {
-      case JsString(str) => ErrorCode.withNameOption(str)
-        .getOrElse(Other(str))
-      case other => deserializationError(s"error code must be a JsString, found $other")
-    }
-    override def write(ec: ErrorCode) = JsString(ec.entryName)
-  }
-  implicit lazy val errorResFormat = jsonFormat(ErrorResponse, "errcode", "error")
-
-  implicit object versionsFormat extends RootJsonFormat[Seq[String]] {
-    override def read(json: JsValue): Seq[String] = {
-      println("fromField: " + fromField[List[String]](json, "versions"))
-      fromField[List[String]](json, "versions")
-    }
-    override def write(value: Seq[String]) = JsObject("versions" -> value.toJson)
-  }
-
-  implicit lazy val loginResFormat = jsonFormat(LoginResponse, "access_token", "home_server", "user_id", "refresh_token")
-  implicit lazy val registerResFormat = jsonFormat(RegisterResponse, "access_token", "home_server", "user_id", "refresh_token")
-  implicit lazy val tokenRefreshResFormat = jsonFormat(TokenRefreshResponse, "access_token", "refresh_token")
-
-  implicit lazy val authenticationDataFormat = jsonFormat(AuthenticationData, "session", "type")
 
   def loginEntity(user: String, password: String) =
     JsObject("user" -> user.toJson, "password" -> password.toJson, "type" -> "m.login.password".toJson, "medium" -> "email".toJson)
@@ -213,9 +196,6 @@ object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats {
 
   def tokenRefreshEntity(refreshToken: String) = JsObject("refresh_token" -> refreshToken.toJson)
 
-  implicit lazy val thirdPartyIdentifierFormat = jsonFormat(ThirdPartyIdentifier, "medium", "address")
   implicit lazy val threePidCredsFormat = jsonFormat(ThreePidCredentials, "client_secret", "id_server", "sid")
   def _3pidEntity(threePidCredentials: ThreePidCredentials, bind: Boolean) = JsObject("three_pid_creds" -> threePidCredentials.toJson, "bind" -> bind.toJson)
-
-  implicit lazy val _3pidResFormat: RootJsonFormat[_3pidResponse] = jsonFormat(_3pidResponse, "threepids")
 }

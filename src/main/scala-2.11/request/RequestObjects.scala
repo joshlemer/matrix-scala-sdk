@@ -1,7 +1,7 @@
 package request
 import enumeratum._
 import response.EventFormat
-import spray.json.{JsObject, DefaultJsonProtocol}
+import spray.json._
 
 case class AuthenticationData(session: String, _type: String)
 
@@ -45,15 +45,14 @@ object Presence extends Enum[Presence] {
   val values = findValues
 }
 
-sealed trait Visibility extends EnumEntry
-
+sealed abstract class Visibility(override val entryName: String) extends EnumEntry
 object Visibility extends Enum[Visibility] {
-  case object Public extends Visibility
-  case object Private extends Visibility
+  case object Public extends Visibility("public")
+  case object Private extends Visibility("private")
   val values = findValues
 }
 
-sealed abstract class Preset(override val toString: String) extends EnumEntry
+sealed abstract class Preset(override val entryName: String) extends EnumEntry
 object Preset extends Enum[Preset] {
   /** join_rules is set to `invite`
     * history_visibility is set to `shared` */
@@ -74,10 +73,27 @@ case class Invite3pid(idServer: String, medium: String, address: String)
 case class StateEvent(content: String, _type: String, stateKey: String)
 
 trait RequestFormats extends DefaultJsonProtocol {
+
+  def enumFormat[T <: EnumEntry](enum: Enum[T]): JsonFormat[T] = new JsonFormat[T] {
+    def read(json: JsValue) = json match { case JsString(value) => enum.withName(value) case _ => deserializationError("enum must be string")}
+    def write(entry: T) = JsString(entry.entryName)
+  }
+
+  implicit lazy val invite3pidFormat = jsonFormat(Invite3pid, "id_server", "medium", "address")
+  implicit lazy val stateEventFormat = jsonFormat(StateEvent, "content", "type", "state_key")
+
+
   def createRoomRequest(
     preset: Preset, invite: Seq[String], name: Option[String], visibility: Visibility,
     invite3pids: Seq[Invite3pid], topic: Option[String], initialState: Seq[StateEvent],
     roomAliasName: Option[String]
-    ) = JsObject(
-    )
+    ) = {
+    val fields = Map("preset" -> preset.toJson(enumFormat(Preset)), "visibility" -> visibility.toJson(enumFormat(Visibility)), "invite_3pid" -> invite3pids.toJson,
+      "initial_state" -> initialState.toJson
+    ) ++ name.map("name" -> _.toJson) ++ topic.map("topic" -> _.toJson) ++ roomAliasName.map("room_alias_name" -> _.toJson)
+
+    JsObject(fields)
+  }
+
+  implicit lazy val authenticationDataFormat = jsonFormat(AuthenticationData, "session", "type")
 }
