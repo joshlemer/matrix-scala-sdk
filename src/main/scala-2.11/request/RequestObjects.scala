@@ -69,8 +69,9 @@ object Preset extends Enum[Preset] {
 }
 
 case class Invite3pid(idServer: String, medium: String, address: String)
-
 case class StateEvent(content: String, _type: String, stateKey: String)
+
+case class ThirdPartySigned(token: String, signatures: Map[String, Map[String, String]], mxid: String, sender: String)
 
 trait RequestFormats extends DefaultJsonProtocol {
 
@@ -81,7 +82,7 @@ trait RequestFormats extends DefaultJsonProtocol {
 
   implicit lazy val invite3pidFormat = jsonFormat(Invite3pid, "id_server", "medium", "address")
   implicit lazy val stateEventFormat = jsonFormat(StateEvent, "content", "type", "state_key")
-
+  implicit lazy val thirdPartySignedFormat = jsonFormat4(ThirdPartySigned)
 
   def createRoomRequest(
     preset: Preset, invite: Seq[String], name: Option[String], visibility: Visibility,

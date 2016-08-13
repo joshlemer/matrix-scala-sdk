@@ -118,10 +118,12 @@ trait ResponseFormats extends DefaultJsonProtocol {
   implicit lazy val registerResFormat = jsonFormat(RegisterResponse, "access_token", "home_server", "user_id", "refresh_token")
   implicit lazy val tokenRefreshResFormat = jsonFormat(TokenRefreshResponse, "access_token", "refresh_token")
 
-  lazy val roomIdFormat = new RootJsonFormat[String] {
-    def read(json: JsValue) = fromField[String](json, "room_id")
-    def write(roomId: String) = JsObject("room_id" -> roomId.toJson)
+  def singleStringValueFormat(key: String) = new RootJsonFormat[String] {
+    def read(json: JsValue) = fromField[String](json, key)
+    def write(value: String) = JsObject(key -> value.toJson)
   }
+  lazy val roomIdFormat = singleStringValueFormat("room_id")
+  lazy val nameFormat = singleStringValueFormat("name")
 
   implicit lazy val membershipFormat = new JsonFormat[Membership] {
     def read(json: JsValue) = json match {

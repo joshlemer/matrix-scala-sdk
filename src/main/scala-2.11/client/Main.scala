@@ -173,6 +173,26 @@ class MatrixClient(val serverUrl: String) {
         single[RoomId](Post(createRoomEndpoint, req))(roomIdFormat)
       }
     }
+    case class rooms(roomId: RoomId) {
+      val roomEndpoint = s"$versionEndpoint/rooms/$roomId"
+      object join {
+        def post(thirdPartySigned: Option[ThirdPartySigned] = None): Future[RoomId] = {
+          val joinEndpoint = s"$roomEndpoint/join"
+          val req = JsObject(thirdPartySigned.map("third_party_signed" -> _.toJson).toMap)
+          single[RoomId](Post(Uri(joinEndpoint), req))(roomIdFormat)
+        }
+      }
+      case class state(eventType: String) {
+        val stateEndpoint = s"$roomEndpoint/state/$eventType"
+        def get(): Future[String] = single[String](Get(stateEndpoint))(nameFormat)
+      }
+      case class send(eventType: String, transactionId: String) {
+        val sendEndpoint = s"$roomEndpoint/send/$eventType/$transactionId"
+        def put(jsObject: JsObject) = single[String](Put(sendEndpoint, jsObject))(singleStringValueFormat("event_id"))
+      }
+
+    }
+
   }
 
   def shutDown() = {
