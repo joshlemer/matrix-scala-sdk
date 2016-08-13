@@ -38,10 +38,10 @@ object UserKind extends Enum[UserKind] {
   val values = findValues
 }
 
-sealed trait Presence extends EnumEntry
+sealed abstract class Presence(override val entryName: String) extends EnumEntry
 
 object Presence extends Enum[Presence] {
-  case object Offline extends Presence
+  case object Offline extends Presence("offline")
   val values = findValues
 }
 

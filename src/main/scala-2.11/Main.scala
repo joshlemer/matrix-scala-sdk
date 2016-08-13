@@ -2,10 +2,10 @@
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.client.RequestBuilding._
-import akka.http.scaladsl.model.{StatusCode, HttpRequest}
+import akka.http.scaladsl.model.Uri.Query
+import akka.http.scaladsl.model.{Uri, StatusCode, HttpRequest}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import request._
-import response.Presence
 import response._
 
 import spray.json._
@@ -128,7 +128,13 @@ class MatrixClient(val serverUrl: String) {
 
     object sync {
       val syncEndpoint = s"$versionEndpoint/sync"
-      def get(filter: String, since: String, fullState: Boolean, setPresence: Presence, timeout: Int): Future[SyncResponse] = ???
+      import request.Presence, Presence._
+      def get(filter: String, since: String, timeout: Int, fullState: Boolean = false, setPresence: Presence = Offline): Future[SyncResponse] = {
+
+        val query = Query("filter" -> filter, "since" -> since, "full_state" -> fullState.toString, "set_presence" -> setPresence.entryName)
+
+        single[SyncResponse](Post(Uri(syncEndpoint).withQuery(query)))
+      }
     }
 
     object createRoom {
@@ -158,7 +164,7 @@ class MatrixClient(val serverUrl: String) {
 case class ErrorResponseException(errorResponse: ErrorResponse) extends Exception
 
 
-object MatrixJsonProtocol extends DefaultJsonProtocol {
+object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats {
 
   implicit lazy val errorCodeFormat = new JsonFormat[ErrorCode] {
     override def read(json: JsValue) = json match {
