@@ -67,6 +67,8 @@ class MatrixClient(val serverUrl: String) {
     case res => Unmarshal(res).to[ErrorResponse].flatMap(e => Future.failed(ErrorResponseException(e)))
   }
 
+  def accessTokenQuery(accessToken: String) = Query("access_token" -> accessToken)
+
   object versions {
     def get() = single(Get(s"$clientEndpoint/versions"))(versionsFormat)
   }
@@ -151,7 +153,6 @@ class MatrixClient(val serverUrl: String) {
         val params = Map("full_state" -> fullState.toString, "access_token" -> accessToken) ++
           filter.map("filter" -> _) ++ since.map("since" -> _)
 
-
         single[SyncResponse](Get(Uri(syncEndpoint).withQuery(Query(params))))
       }
     }
@@ -189,6 +190,15 @@ class MatrixClient(val serverUrl: String) {
       case class send(eventType: String, transactionId: String) {
         val sendEndpoint = s"$roomEndpoint/send/$eventType/$transactionId"
         def put(jsObject: JsObject) = single[String](Put(sendEndpoint, jsObject))(singleStringValueFormat("event_id"))
+      }
+      object leave {
+        val leaveEndpoint = s"$roomEndpoint/leave"
+        def post(accessToken: String) = singleToStatus(Post(Uri(leaveEndpoint).withQuery(accessTokenQuery(accessToken))))
+      }
+      object invite {
+        val inviteEndpoint = s"$roomEndpoint/invite"
+        def post(accessToken: String, userId: String) =
+          singleToStatus(Post(Uri(inviteEndpoint).withQuery(accessTokenQuery(accessToken)), singleStringValueFormat("user_id").write(userId)))
       }
 
     }
