@@ -1,4 +1,3 @@
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.client.RequestBuilding._
@@ -6,12 +5,14 @@ import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.{Uri, StatusCode, HttpRequest}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import request._
+import response.ErrorCode.Other
 import response._
 
 import spray.json._
 import akka.stream.ActorMaterializer
 
 import scala.concurrent.Future
+import scala.util.{Failure, Success}
 
 object Main extends App {
 
@@ -22,7 +23,17 @@ object Main extends App {
   implicit val ec = client.ec
 
 //  client.r0.login.post("username", "password").andThen { case x => println(x); client.shutDown()}
-
+  client.r0.login.post("username","password") flatMap { case loginResponse =>
+    client.r0.sync.get(loginResponse.accessToken).andThen{
+      case Success(syncResponse) =>
+        ()
+      case Failure(e) =>
+        ()
+    }.andThen { case x =>
+      println(x)
+      client.shutDown()
+    }
+  }
 }
 
 class MatrixClient(val serverUrl: String) {
@@ -129,11 +140,14 @@ class MatrixClient(val serverUrl: String) {
     object sync {
       val syncEndpoint = s"$versionEndpoint/sync"
       import request.Presence, Presence._
-      def get(filter: String, since: String, timeout: Int, fullState: Boolean = false, setPresence: Presence = Offline): Future[SyncResponse] = {
+      def get(accessToken: String, filter: String = null, since: String = null, timeout: Int = 4000, fullState: Boolean = false, setPresence: Presence = Offline): Future[SyncResponse] = {
+        val (filterOpt, sinceOpt) = (Option(filter), Option(since))
 
-        val query = Query("filter" -> filter, "since" -> since, "full_state" -> fullState.toString, "set_presence" -> setPresence.entryName)
+        val params = Map("full_state" -> fullState.toString, "access_token" -> accessToken) ++
+          filterOpt.map("filter" -> _) ++ sinceOpt.map("since" -> _)
 
-        single[SyncResponse](Post(Uri(syncEndpoint).withQuery(query)))
+
+        single[SyncResponse](Get(Uri(syncEndpoint).withQuery(Query(params))))
       }
     }
 
@@ -169,7 +183,7 @@ object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats {
   implicit lazy val errorCodeFormat = new JsonFormat[ErrorCode] {
     override def read(json: JsValue) = json match {
       case JsString(str) => ErrorCode.withNameOption(str)
-        .getOrElse(deserializationError(s"$str not a recognized error code"))
+        .getOrElse(Other(str))
       case other => deserializationError(s"error code must be a JsString, found $other")
     }
     override def write(ec: ErrorCode) = JsString(ec.entryName)
@@ -204,6 +218,4 @@ object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats {
   def _3pidEntity(threePidCredentials: ThreePidCredentials, bind: Boolean) = JsObject("three_pid_creds" -> threePidCredentials.toJson, "bind" -> bind.toJson)
 
   implicit lazy val _3pidResFormat: RootJsonFormat[_3pidResponse] = jsonFormat(_3pidResponse, "threepids")
-
-
 }

@@ -10,8 +10,13 @@ case class TokenRefreshResponse(accessToken: String, refreshToken: Option[String
 case class ThirdPartyIdentifier(medium: String, address: String)
 case class _3pidResponse(threePids: List[ThirdPartyIdentifier])
 case class FilterResponse(filterId: String)
+
+/////////////////////////////////////////////////////////////////////////////
+///       SyncResponse objects
+/////////////////////////////////////////////////////////////////////////////
+
 case class SyncResponse(nextBatch: String, rooms: Rooms, presence: Presence)
-case class Rooms(leave: Map[RoomId, LeftRoom], join: Map[RoomId, JoinedRoom], infite: Map[RoomId, InvitedRoom])
+case class Rooms(leave: Map[RoomId, LeftRoom], join: Map[RoomId, JoinedRoom], invite: Map[RoomId, InvitedRoom])
 case class LeftRoom(timeline: Timeline, state: State)
 case class JoinedRoom(
   unreadNotifications: UnreadNotificationCounts,
@@ -31,14 +36,14 @@ case class InviteState(events: List[Event])
 case class Presence(events: List[Event])
 case class Event(
   content: EventContent,
-  originServerTs: Int,
-  sender: String,
+  originServerTs: Option[Int],
+  sender: Option[String],
   _type: String,
-  unsigned: Unsigned,
-  stateKey: String
+  unsigned: Option[Unsigned],
+  stateKey: Option[String]
   )
-case class Unsigned(prevContent: Option[EventContent], age: Int, transactionId: String)
-case class EventContent(thirdPartyInvite: Invite, membership: Membership, avatarUrl: String, displayName: Option[String])
+case class Unsigned(prevContent: Option[EventContent], age: Option[Int], transactionId: Option[String])
+case class EventContent(thirdPartyInvite: Option[Invite], membership: Option[Membership], avatarUrl: Option[String], displayName: Option[String])
 
 sealed trait Membership extends EnumEntry
 object Membership extends Enum[Membership]{
@@ -60,6 +65,10 @@ object EventFormat extends Enum[EventFormat] {
   val values = findValues
 }
 
+/////////////////////////////////////////////////////////////////////////////
+///       ErrorCodes objects
+/////////////////////////////////////////////////////////////////////////////
+
 sealed trait ErrorCode extends EnumEntry
 
 object ErrorCode extends Enum[ErrorCode] {
@@ -75,6 +84,8 @@ object ErrorCode extends Enum[ErrorCode] {
   case object M_THREEPID_IN_USE extends ErrorCode
   case object M_THREEPID_NOT_FOUND extends ErrorCode
   case object M_SERVER_NOT_TRUSTED extends ErrorCode
+  case object M_UNRECOGNIZED extends ErrorCode
+  case class Other(override val entryName: String) extends ErrorCode
   val values = findValues
 }
 
