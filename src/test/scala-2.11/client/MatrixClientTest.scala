@@ -2,15 +2,12 @@ package client
 
 import org.scalatest.{AsyncFlatSpec, Matchers}
 import request.{AuthenticationData, UserKind}
-import response.RegisterResponse
-
-import scala.util.Success
+import response.{LoginResponse, RegisterResponse}
 
 class MatrixClientTest extends AsyncFlatSpec with Matchers {
 
   val client = new MatrixClient("http://localhost:8008")
   implicit val ec = client.ec
-
 
   behavior of "MatrixClient"
 
@@ -21,22 +18,31 @@ class MatrixClientTest extends AsyncFlatSpec with Matchers {
   it should "Register a guest" in {
     client.r0.register.post(
       UserKind.Guest, "someUserName", "someUserPassword", bindEmail = false,
-      AuthenticationData(None, "example.type.foo")).map{res =>
-      res should matchPattern { case RegisterResponse(_, "localhost", _, None) => } }
+      AuthenticationData(None, "example.type.foo")
+    ).map{res =>
+      res should matchPattern { case RegisterResponse(_, "localhost", _, None) => }
+    }
   }
 
   it should "Register a new user" in {
     client.r0.register.post(
-      UserKind.User, "someUserName", "someUserPassword", bindEmail = false)
-      .andThen {
-        case Success(RegisterResponse(accessToken, _,userId,_)) =>
-          //client.r0.account.deactivate.post(accessToken, )
-        case x => println(x)
-      }
-      .map{ res =>
-      println(res)
-      res should matchPattern { case RegisterResponse(_, "localhost", _, None) => }
+      UserKind.User, "someUserName", "someUserPassword", bindEmail = false).map{ res =>
+      res should matchPattern { case RegisterResponse(_, "localhost", _, Some(_)) => }
     }
   }
+
+  it should "Login an existing user" in {
+    client.r0.login.post("someUserName", "someUserPassword").map { res =>
+      res should matchPattern { case LoginResponse(_, "localhost", _, _) => }
+    }
+  }
+
+  it should "Fail to login a fake user" in {
+    client.r0.login.post("doesNotExist", "123454").failed.map { f =>
+      f should matchPattern { case ErrorResponseException(_) => }
+    }
+  }
+
+
 
 }

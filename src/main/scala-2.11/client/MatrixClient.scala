@@ -80,22 +80,20 @@ class MatrixClient(val serverUrl: String)(implicit system: ActorSystem = ActorSy
   object r0 {
     private val versionEndpoint = s"$clientEndpoint/r0"
     val login: LoginSupport = new LoginSupport {
-      val loginEndpoint = s"$versionEndpoint/login"
+      private val loginEndpoint = s"$versionEndpoint/login"
       def post(user: String, password: String) = single[LoginResponse](Post(loginEndpoint, loginEntity(user, password)))
     }
     object register {
       private val registerEndpoint = s"$versionEndpoint/register"
       def post(userKind: UserKind = UserKind.User, userName: String, password: String, bindEmail: Boolean, authenticationData: AuthenticationData = AuthenticationData(None, "m.login.dummy")) = {
         val query = Query("kind" -> userKind.entryName)
-        val p = Post(Uri(registerEndpoint).withQuery(query), registerEntity(userName, password, bindEmail, authenticationData))
-
         single[RegisterResponse](Post(Uri(registerEndpoint).withQuery(query), registerEntity(userName, password, bindEmail, authenticationData)))
       }
 
-      object email {
+      val email = new RegisterEmailSupport {
         private val emailEndpoint = s"$versionEndpoint/email"
-        object requestToken {
-          val requestTokenEndpoint = s"$emailEndpoint/requestToken"
+        val requestToken = new RequestTokenSupport {
+          private val requestTokenEndpoint = s"$emailEndpoint/requestToken"
           def post(clientSecret: String, idServer: String, sendAttempt: Int, email: String) =
             singleToStatus(Post(requestTokenEndpoint))
         }
@@ -252,8 +250,8 @@ class MatrixClient(val serverUrl: String)(implicit system: ActorSystem = ActorSy
   def shutDown(): Future[Terminated] =  close().flatMap(_ => system.terminate())
 }
 
-case class ErrorResponseException(errorResponse: ErrorResponse) extends Exception
-
+case class ErrorResponseException(errorResponse: ErrorResponse) extends
+  Exception(s"${errorResponse.errorCode}: ${errorResponse.error.getOrElse("<no message>")}")
 
 object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats with RequestFormats {
 
@@ -273,7 +271,7 @@ object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats with 
 abstract class LoginSupport {
   def post(user: String, password: String): Future[LoginResponse]
 }
-abstract class EmailSupport {
+abstract class RegisterEmailSupport {
   def requestToken: RequestTokenSupport
 }
 abstract class RequestTokenSupport {
