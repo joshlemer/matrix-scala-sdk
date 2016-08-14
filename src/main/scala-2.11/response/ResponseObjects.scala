@@ -5,7 +5,7 @@ import response.ErrorCode.Other
 import spray.json.DefaultJsonProtocol
 
 case class LoginResponse(accessToken: String, homeServer: String, userId: String, refreshToken: String)
-case class RegisterResponse(accessToken: String, homeServer: String, userId: String, refreshToken: String)
+case class RegisterResponse(accessToken: String, homeServer: String, userId: String, refreshToken: Option[String])
 case class TokenRefreshResponse(accessToken: String, refreshToken: Option[String])
 
 case class ThirdPartyIdentifier(medium: String, address: String)

@@ -1,9 +1,9 @@
 package request
 import enumeratum._
-import response.EventFormat
+import response.{AccountData, EventFormat}
 import spray.json._
 
-case class AuthenticationData(session: String, _type: String)
+case class AuthenticationData(session: Option[String] = None, _type: String)
 
 case class ThreePidCredentials(clientSecret: String, idServer: String, sid: String)
 
@@ -29,11 +29,11 @@ case class Filter( notTypes: List[String], limit: Int, senders: List[String], ty
 
 case class FilterPostRequest( eventFields: List[String], eventFormat: EventFormat, accountData: Filter, room: RoomFilter, presence: Filter)
 
-sealed trait UserKind extends EnumEntry
+sealed abstract class UserKind(override val entryName: String) extends EnumEntry
 
 object UserKind extends Enum[UserKind] {
-  case object User extends UserKind
-  case object Guest extends UserKind
+  case object User extends UserKind("user")
+  case object Guest extends UserKind("guest")
 
   val values = findValues
 }
@@ -97,4 +97,9 @@ trait RequestFormats extends DefaultJsonProtocol {
   }
 
   implicit lazy val authenticationDataFormat = jsonFormat(AuthenticationData, "session", "type")
+
+  def banUserRequest(userId: String, reason: Option[String]) = JsObject("user_id" -> userId.toJson, "reason" -> reason.toJson)
+
+//  implicit lazy val filterPostRequest = jsonFormat(FilterPostRequest, "event_fields", "event_format", "account_data", "room", "presenece")
+
 }
