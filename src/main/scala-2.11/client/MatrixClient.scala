@@ -1,5 +1,4 @@
 package client
-
 import akka.actor.{Terminated, ActorSystem}
 import akka.http.scaladsl._
 import akka.http.scaladsl.client.RequestBuilding._
@@ -80,14 +79,16 @@ class MatrixClient(val serverUrl: String)(implicit system: ActorSystem = ActorSy
   val clientEndpoint = s"$serverUrl/_matrix/client"
   object r0 {
     private val versionEndpoint = s"$clientEndpoint/r0"
-    object login {
-      private val loginEndpoint = s"$versionEndpoint/login"
+    val login: LoginSupport = new LoginSupport {
+      val loginEndpoint = s"$versionEndpoint/login"
       def post(user: String, password: String) = single[LoginResponse](Post(loginEndpoint, loginEntity(user, password)))
     }
     object register {
       private val registerEndpoint = s"$versionEndpoint/register"
-      def post(userKind: UserKind, userName: String, password: String, bindEmail: Boolean, authenticationData: AuthenticationData) = {
+      def post(userKind: UserKind = UserKind.User, userName: String, password: String, bindEmail: Boolean, authenticationData: AuthenticationData = AuthenticationData(None, "m.login.dummy")) = {
         val query = Query("kind" -> userKind.entryName)
+        val p = Post(Uri(registerEndpoint).withQuery(query), registerEntity(userName, password, bindEmail, authenticationData))
+
         single[RegisterResponse](Post(Uri(registerEndpoint).withQuery(query), registerEntity(userName, password, bindEmail, authenticationData)))
       }
 
@@ -227,7 +228,7 @@ class MatrixClient(val serverUrl: String)(implicit system: ActorSystem = ActorSy
 
     }
 
-    case class profile(userId: UserId) {
+    case class profile(private val userId: UserId) {
       val profileEndpoint = s"$versionEndpoint/profile/$userId"
       object displayName {
         val displayNameEndpoint = s"$profileEndpoint/displayName"
@@ -267,4 +268,14 @@ object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats with 
 
   implicit lazy val threePidCredsFormat = jsonFormat(ThreePidCredentials, "client_secret", "id_server", "sid")
   def _3pidEntity(threePidCredentials: ThreePidCredentials, bind: Boolean) = JsObject("three_pid_creds" -> threePidCredentials.toJson, "bind" -> bind.toJson)
+}
+
+abstract class LoginSupport {
+  def post(user: String, password: String): Future[LoginResponse]
+}
+abstract class EmailSupport {
+  def requestToken: RequestTokenSupport
+}
+abstract class RequestTokenSupport {
+  def post(clientSecret: String, idServer: String, sendAttempt: Int, email: String): Future[StatusCode]
 }
