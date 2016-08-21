@@ -1,6 +1,6 @@
 package request
 import enumeratum._
-import response.{AccountData, EventFormat}
+import response.EventFormat
 import spray.json._
 
 case class AuthenticationData(session: Option[String] = None, _type: String)
@@ -25,7 +25,7 @@ case class RoomFilter(
   state: RoomEventFilter,
   notRooms: List[String] = Nil)
 
-case class Filter( notTypes: List[String], limit: Int, senders: List[String], types: List[String], notSenders: List[String])
+case class Filter(notTypes: List[String], limit: Int, senders: List[String], types: List[String], notSenders: List[String])
 
 case class FilterPostRequest( eventFields: List[String], eventFormat: EventFormat, accountData: Filter, room: RoomFilter, presence: Filter)
 

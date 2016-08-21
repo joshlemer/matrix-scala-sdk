@@ -1,43 +1,21 @@
 package client
-import akka.actor.{Terminated, ActorSystem}
-import akka.http.scaladsl._
-import akka.http.scaladsl.client.RequestBuilding._
-import akka.http.scaladsl.model.Uri.Query
-import akka.http.scaladsl.model.{HttpResponse, HttpRequest, StatusCode, Uri}
-import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.stream.ActorMaterializer
-import request._
-import response._
-import spray.json._
 
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
+
+import akka.actor.{ActorSystem, Terminated}
+import akka.http.scaladsl._
+import akka.http.scaladsl.client.RequestBuilding._
+import akka.http.scaladsl.model.{HttpResponse, HttpRequest, StatusCode, Uri}, Uri.Query
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.stream.ActorMaterializer
+import spray.json._
+
+import request._
+import response._
 
 package object client {
   implicit class AnyAsOptionExtension[T <: Any](val any: T) extends AnyVal {
     @inline final def ? = Option(any)
-  }
-}
-
-object Main extends App {
-
-  val serverUrl = "https://matrix.org"
-
-  val client = new MatrixClient(serverUrl)
-
-  implicit val ec = client.ec
-
-//  client.r0.login.post("username", "password").andThen { case x => println(x); client.shutDown()}
-  client.r0.login.post("username","password") flatMap { case loginResponse =>
-    client.r0.sync.get(loginResponse.accessToken).andThen{
-      case Success(syncResponse) =>
-        ()
-      case Failure(e) =>
-        ()
-    }.andThen { case x =>
-      println(x)
-      client.shutDown()
-    }
   }
 }
 
@@ -94,15 +72,18 @@ class MatrixClient(val serverUrl: String)(implicit system: ActorSystem = ActorSy
         private val emailEndpoint = s"$versionEndpoint/email"
         val requestToken = new RequestTokenSupport {
           private val requestTokenEndpoint = s"$emailEndpoint/requestToken"
-          def post(clientSecret: String, idServer: String, sendAttempt: Int, email: String) =
-            singleToStatus(Post(requestTokenEndpoint))
+          def post(clientSecret: String, idServer: Option[String], sendAttempt: Int, email: String) = {
+            val p = Post(requestTokenEndpoint, requestTokenEntity(clientSecret, idServer, sendAttempt.toString, email))
+            singleToStatus(Post(requestTokenEndpoint, requestTokenEntity(clientSecret, idServer, sendAttempt.toString, email)))
+          }
         }
       }
     }
     object tokenRefresh {
       private val tokenRefreshEndpoint = s"$versionEndpoint/tokenrefresh"
       def post(accessToken: AccessToken, refreshToken: String) =
-        single[TokenRefreshResponse](Post(Uri(tokenRefreshEndpoint).withAccessToken(accessToken), tokenRefreshEntity(refreshToken)))
+        single[TokenRefreshResponse](Post(Uri(tokenRefreshEndpoint).withAccessToken(accessToken),
+          singleStringValueFormat("refresh_token").write(refreshToken)))
     }
     object logout {
       private val logoutEndpoint = s"$versionEndpoint/logout"
@@ -226,15 +207,15 @@ class MatrixClient(val serverUrl: String)(implicit system: ActorSystem = ActorSy
 
     }
 
-    case class profile(private val userId: UserId) {
-      val profileEndpoint = s"$versionEndpoint/profile/$userId"
-      object displayName {
-        val displayNameEndpoint = s"$profileEndpoint/displayName"
+    def profile(userId: UserId) = new ProfileSupport(userId) {
+      private val profileEndpoint = s"$versionEndpoint/profile/$userId"
+      def displayName = new DisplayNameSupport {
+        private val displayNameEndpoint = s"$profileEndpoint/displayName"
         def get() = single[String](Get(displayNameEndpoint))(singleStringValueFormat("displayname"))
         def put(accessToken: String, displayName: String) =
           singleToStatus(Put(displayNameEndpoint, JsObject("displayname" -> displayName.toJson)))
       }
-      object avatarUrl {
+      def avatarUrl = new AvatarUrlSupport {
         val avatarUrlEndpoint = s"$profileEndpoint/avatar_url"
         def get() = single[String](Get(avatarUrlEndpoint))(singleStringValueFormat("avatar_url"))
         def put(accessToken: String, avatarUrl: String) =
@@ -262,10 +243,11 @@ object MatrixJsonProtocol extends DefaultJsonProtocol with ResponseFormats with 
     JsObject("username" -> userName.toJson, "password" -> password.toJson, "bind_email" -> bindEmail.toJson,
     "auth" -> authenticationData.toJson)
 
-  def tokenRefreshEntity(refreshToken: String) = JsObject("refresh_token" -> refreshToken.toJson)
-
   implicit lazy val threePidCredsFormat = jsonFormat(ThreePidCredentials, "client_secret", "id_server", "sid")
   def _3pidEntity(threePidCredentials: ThreePidCredentials, bind: Boolean) = JsObject("three_pid_creds" -> threePidCredentials.toJson, "bind" -> bind.toJson)
+
+  def requestTokenEntity(clientSecret: String, idServer: Option[String], sendAttempt: String, email: String) =
+    JsObject("client_secret" -> clientSecret.toJson, "id_server" -> idServer.toJson, "send_attempt" -> sendAttempt.toJson, "email" -> email.toJson)
 }
 
 abstract class LoginSupport {
@@ -275,5 +257,17 @@ abstract class RegisterEmailSupport {
   def requestToken: RequestTokenSupport
 }
 abstract class RequestTokenSupport {
-  def post(clientSecret: String, idServer: String, sendAttempt: Int, email: String): Future[StatusCode]
+  def post(clientSecret: String, idServer: Option[String], sendAttempt: Int, email: String): Future[StatusCode]
+}
+abstract class ProfileSupport(userId: UserId) {
+  def displayName: DisplayNameSupport
+  def avatarUrl: AvatarUrlSupport
+}
+abstract class DisplayNameSupport {
+  def get(): Future[String]
+  def put(accessToken: String, displayName: String): Future[StatusCode]
+}
+abstract class AvatarUrlSupport {
+  def get(): Future[String]
+  def put(accessToken: String, avatarUrl: String): Future[StatusCode]
 }

@@ -1,8 +1,9 @@
 package client
 
+import akka.http.scaladsl.model.StatusCodes
 import org.scalatest.{AsyncFlatSpec, Matchers}
 import request.{AuthenticationData, UserKind}
-import response.{LoginResponse, RegisterResponse}
+import response.{TokenRefreshResponse, LoginResponse, RegisterResponse}
 
 class MatrixClientTest extends AsyncFlatSpec with Matchers {
 
@@ -43,6 +44,22 @@ class MatrixClientTest extends AsyncFlatSpec with Matchers {
     }
   }
 
+//  it should "Receive a success when requesting a token" in {
+//    client.r0.register.email.requestToken.post("somesuperdupersecretsecret",None,1,"joshlemer@gmail.com").map{ res =>
+//      res should be (StatusCodes.Success)
+//    }
+//  }
+
+  it should "Receive successfully refresh a token for an existing user" in {
+    client.r0.login.post("someUserName", "someUserPassword")
+    .flatMap{loginRes =>
+      println(loginRes)
+      client.r0.tokenRefresh.post(loginRes.accessToken, loginRes.refreshToken)
+    }.map{refreshRes =>
+      println(refreshRes)
+      refreshRes should matchPattern { case TokenRefreshResponse(_, _) => }
+    }
+  }
 
 
 }
