@@ -44,6 +44,13 @@ class MatrixClientTest extends AsyncFlatSpec with Matchers {
     }
   }
 
+  it should "Log out a logged-in user" in {
+    client.login.post("someUserName", "someUserPassword")
+    .flatMap( loginRes =>
+      client.logout.post(loginRes.accessToken)
+    ).map(statusCode => statusCode.isSuccess should be(true))
+  }
+
 //  it should "Receive a success when requesting a token" in {
 //    client.register.email.requestToken.post("somesuperdupersecretsecret",None,1,"joshlemer@gmail.com").map{ res =>
 //      res should be (StatusCodes.Success)
