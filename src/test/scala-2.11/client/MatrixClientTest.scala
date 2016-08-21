@@ -17,7 +17,7 @@ class MatrixClientTest extends AsyncFlatSpec with Matchers {
   }
 
   it should "Register a guest" in {
-    client.r0.register.post(
+    client.register.post(
       UserKind.Guest, "someUserName", "someUserPassword", bindEmail = false,
       AuthenticationData(None, "example.type.foo")
     ).map{res =>
@@ -26,35 +26,35 @@ class MatrixClientTest extends AsyncFlatSpec with Matchers {
   }
 
   it should "Register a new user" in {
-    client.r0.register.post(
+    client.register.post(
       UserKind.User, "someUserName", "someUserPassword", bindEmail = false).map{ res =>
       res should matchPattern { case RegisterResponse(_, "localhost", _, Some(_)) => }
     }
   }
 
   it should "Login an existing user" in {
-    client.r0.login.post("someUserName", "someUserPassword").map { res =>
+    client.login.post("someUserName", "someUserPassword").map { res =>
       res should matchPattern { case LoginResponse(_, "localhost", _, _) => }
     }
   }
 
   it should "Fail to login a fake user" in {
-    client.r0.login.post("doesNotExist", "123454").failed.map { f =>
+    client.login.post("doesNotExist", "123454").failed.map { f =>
       f should matchPattern { case ErrorResponseException(_) => }
     }
   }
 
 //  it should "Receive a success when requesting a token" in {
-//    client.r0.register.email.requestToken.post("somesuperdupersecretsecret",None,1,"joshlemer@gmail.com").map{ res =>
+//    client.register.email.requestToken.post("somesuperdupersecretsecret",None,1,"joshlemer@gmail.com").map{ res =>
 //      res should be (StatusCodes.Success)
 //    }
 //  }
 
   it should "Receive successfully refresh a token for an existing user" in {
-    client.r0.login.post("someUserName", "someUserPassword")
+    client.login.post("someUserName", "someUserPassword")
     .flatMap{loginRes =>
       println(loginRes)
-      client.r0.tokenRefresh.post(loginRes.accessToken, loginRes.refreshToken)
+      client.tokenRefresh.post(loginRes.accessToken, loginRes.refreshToken)
     }.map{refreshRes =>
       println(refreshRes)
       refreshRes should matchPattern { case TokenRefreshResponse(_, _) => }
